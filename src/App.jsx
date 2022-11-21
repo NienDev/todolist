@@ -5,6 +5,7 @@ import {
   Route,
   NavLink,
   useNavigate,
+  HashRouter,
 } from "react-router-dom";
 import { UserContext } from "./context/UserContext";
 import {
@@ -14,7 +15,7 @@ import {
 } from "firebase/auth";
 import { auth, db } from "./firebase";
 import { uid } from "uid";
-import { set, ref, onValue } from "firebase/database";
+import { set, ref, onValue, remove, update } from "firebase/database";
 
 function TodoItem(props) {
   return (
@@ -33,10 +34,14 @@ function TodoItem(props) {
         <div className="flex items-center gap-2 ">
           <button onClick={() => props.handleCheck(props.id)}>
             {props.check ? (
-              <img src="/x.svg" alt="x-icon" className="h-[24px] w-[24px]" />
+              <img
+                src="/todolist/x.svg"
+                alt="x-icon"
+                className="h-[24px] w-[24px]"
+              />
             ) : (
               <img
-                src="/tick.svg"
+                src="/todolist/tick.svg"
                 alt="tick-icon"
                 className="h-[24px] w-[24px]"
               />
@@ -44,7 +49,7 @@ function TodoItem(props) {
           </button>
           <button>
             <img
-              src="/bin.svg"
+              src="/todolist/bin.svg"
               alt="bin-icon"
               className="h-[24px] w-[24px]"
               onClick={() => {
@@ -79,11 +84,11 @@ function reducer(todos, action) {
       ];
 
     case ACTIONS.DELETE:
-      return todos.filter((todo) => todo.id !== action.payload.delID && todo);
+      return todos.filter((todo) => todo.uidd !== action.payload.delID && todo);
     case ACTIONS.CHECK:
       return todos.map((todo) => {
-        console.log(todo.id, action.payload.checkID);
-        return todo.id === action.payload.checkID
+        // console.log(todo.id, action.payload.checkID);
+        return todo.uidd === action.payload.checkID
           ? { ...todo, done: !todo.done }
           : todo;
       });
@@ -111,17 +116,26 @@ function TodoApp() {
 
   function handleDelete(delID) {
     dispatch({ type: ACTIONS.DELETE, payload: { delID: delID } });
+    remove(ref(db, `/${auth.currentUser.uid}/${delID}`));
+    console.log(auth.currentUser.uid, delID);
   }
 
   function handleCheck(checkID) {
     dispatch({ type: ACTIONS.CHECK, payload: { checkID: checkID } });
-    console.log(todos);
+    const newTodo = todos.filter((todo) => {
+      return todo.uidd === checkID;
+    });
+    const done = newTodo[0].done;
+    update(ref(db, `/${auth.currentUser.uid}/${checkID}`), {
+      ...newTodo,
+      done: !done,
+    });
   }
 
   function handleLogOut() {
     signOut(auth)
       .then(() => {
-        navigate("/todolist/");
+        navigate("/");
       })
       .catch((err) => {
         alert(err.message);
@@ -131,7 +145,7 @@ function TodoApp() {
   useEffect(() => {
     auth.onAuthStateChanged((user) => {
       if (!user) {
-        navigate("/todolist/");
+        navigate("/");
       } else {
         onValue(ref(db, `/${auth.currentUser.uid}`), (snapshot) => {
           dispatch({ type: ACTIONS.DELETEALL });
@@ -201,7 +215,7 @@ function SignUpPage() {
     if (password === confirmPassword) {
       createUserWithEmailAndPassword(auth, email, password)
         .then(() => {
-          navigate("/todolist/");
+          navigate("/");
         })
         .catch((err) => {
           alert(err.message);
@@ -274,7 +288,7 @@ function LoginPage() {
     e.preventDefault();
     signInWithEmailAndPassword(auth, email, password)
       .then(() => {
-        navigate("/todolist/todolist");
+        navigate("/todolist");
       })
       .catch((err) => {
         alert(err.message);
@@ -342,11 +356,12 @@ function LoginPage() {
 function App() {
   return (
     <div className="flex h-screen w-full items-center justify-center">
-      <Router>
+      <Router basename="/todolist">
         <Routes>
-          <Route path="/todolist/" element={<LoginPage />} />
-          <Route path="/todolist/signup" element={<SignUpPage />} />
-          <Route path="/todolist/todolist" element={<TodoApp />} />
+          <Route path="/" element={<LoginPage />} />
+          <Route path="/signup" element={<SignUpPage />} />
+          <Route path="/todolist" element={<TodoApp />} />
+          <Route path="/*" element={<LoginPage />} />
         </Routes>
       </Router>
     </div>
@@ -360,3 +375,6 @@ export default App;
 // ! add to do item of each user to database
 
 // finish get data from database, add item and update to database
+
+// drag item to reorder
+// when edit old note, it will become the latest note and will be at first
