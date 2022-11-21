@@ -12,7 +12,9 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import { auth } from "./firebase";
+import { auth, db } from "./firebase";
+import { uid } from "uid";
+import { set, ref, onValue } from "firebase/database";
 
 function TodoItem(props) {
   return (
@@ -60,6 +62,8 @@ const ACTIONS = {
   ADD: "add",
   DELETE: "delete",
   CHECK: "check",
+  DELETEALL: "delete-all",
+  INIT: "init",
 };
 
 function reducer(todos, action) {
@@ -67,7 +71,11 @@ function reducer(todos, action) {
     case ACTIONS.ADD:
       return [
         ...todos,
-        { id: todos.length + 1, content: action.payload.newTask, done: false },
+        {
+          uidd: action.payload.uidd,
+          content: action.payload.newTask,
+          done: false,
+        },
       ];
 
     case ACTIONS.DELETE:
@@ -79,6 +87,10 @@ function reducer(todos, action) {
           ? { ...todo, done: !todo.done }
           : todo;
       });
+    case ACTIONS.DELETEALL:
+      return [];
+    case ACTIONS.INIT:
+      return [...todos, action.payload.todoObj];
     default:
       return todos;
   }
@@ -91,7 +103,9 @@ function TodoApp() {
 
   function handleSubmit(e) {
     e.preventDefault();
-    dispatch({ type: ACTIONS.ADD, payload: { newTask: newTask } });
+    const uidd = uid();
+    dispatch({ type: ACTIONS.ADD, payload: { newTask: newTask, uidd: uidd } });
+    writeToDatabase(uidd);
     setNewTask("");
   }
 
@@ -118,9 +132,27 @@ function TodoApp() {
     auth.onAuthStateChanged((user) => {
       if (!user) {
         navigate("/todolist/");
+      } else {
+        onValue(ref(db, `/${auth.currentUser.uid}`), (snapshot) => {
+          dispatch({ type: ACTIONS.DELETEALL });
+          const data = snapshot.val();
+          if (data) {
+            Object.values(data).map((todoObj) => {
+              dispatch({ type: ACTIONS.INIT, payload: { todoObj: todoObj } });
+            });
+          }
+        });
       }
     });
   }, []);
+
+  const writeToDatabase = (uidd) => {
+    set(ref(db, `/${auth.currentUser.uid}/${uidd}`), {
+      uidd: uidd,
+      content: newTask,
+      done: false,
+    });
+  };
 
   return (
     <div className="w-[400px] shadow-xl rounded-xl relative">
@@ -145,11 +177,11 @@ function TodoApp() {
       <div>
         {todos.map((task) => (
           <TodoItem
-            key={task.id}
+            key={task.uidd}
             content={task.content}
             handleDelete={handleDelete}
             handleCheck={handleCheck}
-            id={task.id}
+            id={task.uidd}
             check={task.done}
           />
         ))}
@@ -326,3 +358,5 @@ export default App;
 // remind
 // ? how to finish signing up, it will navigate to login page instead of going straight to homepage ?
 // ! add to do item of each user to database
+
+// finish get data from database, add item and update to database
